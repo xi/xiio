@@ -14,6 +14,10 @@ Gen = Generator['Condition', Files, T]
 Coro = Coroutine['Condition', Files, T]
 
 
+class CancelledError(BaseException):
+    pass
+
+
 class Condition:
     def __init__(
         self,
@@ -99,16 +103,74 @@ class Future(typing.Generic[T]):
             return typing.cast(T, self.result)
 
 
+class Task(typing.Generic[T]):
+    def __init__(self, gen: Gen[T]):
+        self.gen = gen
+        self._condition: Condition | None = None
+        self.result: T | None = None
+        self._cancel_soon: bool = False
+
+    @property
+    def condition(self) -> Condition:
+        return self._condition or Condition(time=-math.inf)
+
+    def resume(self, state: Files | BaseException) -> None:
+        if self._cancel_soon:
+            self._cancel_soon = False
+            self._condition = self.gen.throw(CancelledError())
+        elif isinstance(state, BaseException):
+            self._condition = self.gen.throw(state)
+        elif not self._condition:
+            self._condition = next(self.gen)
+        elif self.condition.fulfilled(state):
+            self._condition = self.gen.send(state)
+
+    def cancel(self) -> None:
+        self._cancel_soon = True
+        self._condition = None
+
+
+async def gather(coros: list[Coro[T]]) -> list[T]:
+    tasks = [Task(coro.__await__()) for coro in coros]
+    remaining = tasks[:]
+    exc = None
+
+    while remaining:
+        try:
+            state = await Condition.combine(
+                [task.condition for task in remaining]
+            )
+        except BaseException as e:
+            state = e
+
+        for task in remaining[:]:
+            try:
+                task.resume(state)
+            except StopIteration as e:
+                remaining.remove(task)
+                task.result = e.value
+            except BaseException as e:
+                remaining.remove(task)
+                if not exc:
+                    exc = e
+                    for task in remaining:
+                        task.cancel()
+
+    if exc:
+        raise exc
+
+    return [typing.cast(T, task.result) for task in tasks]
+
+
 def run(coro: Coro[T]) -> T:
-    gen = coro.__await__()
+    task = Task(coro.__await__())
     try:
-        condition = next(gen)
         while True:
             try:
-                files = condition.select()
+                files = task.condition.select()
             except BaseException as e:
-                condition = gen.throw(e)
+                task.resume(e)
             else:
-                condition = gen.send(files)
+                task.resume(files)
     except StopIteration as e:
         return typing.cast(T, e.value)

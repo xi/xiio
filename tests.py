@@ -8,6 +8,25 @@ from unittest import mock
 import xiio
 
 
+async def return_later(seconds, value):
+    await xiio.sleep(seconds)
+    return value
+
+
+async def raise_later(seconds, exc):
+    await xiio.sleep(seconds)
+    raise exc
+
+
+class InterruptCondition(xiio.Condition):
+    def select(self):
+        timeout = self.time - time.monotonic()
+        if timeout > 0:
+            time.sleep(timeout / 2)
+            raise KeyboardInterrupt
+        return {}
+
+
 class XiioTestCase(unittest.TestCase):
     def _callTestMethod(self, method):  # noqa
         if not inspect.iscoroutinefunction(method):
@@ -105,6 +124,85 @@ class TestFuture(XiioTestCase):
             await future
 
 
+class TestGather(XiioTestCase):
+    async def test_sync_values(self):
+        async def return_immediately(value):
+            return value
+
+        with self.assert_duration(0):
+            result = await xiio.gather([
+                return_immediately(1),
+                return_immediately(2),
+            ])
+        self.assertEqual(result, [1, 2])
+
+    async def test_async_values(self):
+        with self.assert_duration(0.2):
+            result = await xiio.gather([
+                return_later(0.2, 1),
+                return_later(0.1, 2),
+            ])
+        self.assertEqual(result, [1, 2])
+
+    async def test_raise_on_error(self):
+        with self.assertRaises(ValueError):
+            with self.assert_duration(0.2):
+                await xiio.gather([
+                    return_later(0.1, 1),
+                    raise_later(0.2, ValueError),
+                ])
+
+    async def test_cancel_others_on_error(self):
+        with self.assertRaises(ValueError):
+            with self.assert_duration(0.1):
+                await xiio.gather([
+                    return_later(0.2, 1),
+                    raise_later(0.1, ValueError),
+                ])
+
+    async def test_cleanup_others_on_error(self):
+        async def foo():
+            try:
+                await xiio.sleep(0.2)
+            finally:
+                await xiio.sleep(0.2)
+
+        with self.assertRaises(ValueError):
+            with self.assert_duration(0.3):
+                await xiio.gather([
+                    foo(),
+                    raise_later(0.1, ValueError),
+                ])
+
+    async def test_swallow_exceptions_during_cancellation(self):
+        async def foo():
+            try:
+                await xiio.sleep(0.3)
+            finally:
+                raise ValueError
+
+        with self.assertRaises(TypeError):
+            with self.assert_duration(0.1):
+                await xiio.gather([
+                    foo(),
+                    raise_later(0.1, TypeError),
+                ])
+
+    async def test_cleanup_on_error_while_paused(self):
+        stack = []
+
+        async def foo():
+            try:
+                await xiio.sleep(0.1)
+            finally:
+                stack.append(1)
+
+        with mock.patch('xiio.Condition', wraps=InterruptCondition):
+            with self.assertRaises(KeyboardInterrupt):
+                await xiio.gather([foo()])
+        self.assertEqual(stack, [1])
+
+
 class TestRun(XiioTestCase):
     def test_sleep(self):
         async def foo():
@@ -124,7 +222,7 @@ class TestRun(XiioTestCase):
             finally:
                 stack.append(1)
 
-        with mock.patch('xiio.Condition.select', side_effect=KeyboardInterrupt):
+        with mock.patch('xiio.Condition', wraps=InterruptCondition):
             with self.assertRaises(KeyboardInterrupt):
                 xiio.run(foo())
         self.assertEqual(stack, [1])
