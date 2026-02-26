@@ -1,12 +1,24 @@
 import time
 
 
-def run(gen):
+class Timeout:
+    def __init__(self, seconds):
+        self.seconds = seconds
+
+    def __await__(self):
+        yield self
+
+    def wait(self):
+        time.sleep(self.seconds)
+
+
+def run(coro):
+    gen = coro.__await__()
     try:
         timeout = next(gen)
         while True:
             try:
-                time.sleep(timeout)
+                timeout.wait()
             except BaseException as e:
                 timeout = gen.throw(e)
             else:

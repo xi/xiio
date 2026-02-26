@@ -19,8 +19,8 @@ class XiioTestCase(unittest.TestCase):
 
 class TestRun(XiioTestCase):
     def test_sleep(self):
-        def foo():
-            yield 0.1
+        async def foo():
+            await xiio.Timeout(0.1)
             return 'Hello World'
 
         with self.assert_duration(0.1):
@@ -30,9 +30,9 @@ class TestRun(XiioTestCase):
     def test_runs_cleanup_on_error_while_paused(self):
         stack = []
 
-        def foo():
+        async def foo():
             try:
-                yield 0.1
+                await xiio.Timeout(0.1)
             finally:
                 stack.append(1)
 
@@ -42,11 +42,11 @@ class TestRun(XiioTestCase):
         self.assertEqual(stack, [1])
 
     def test_waits_for_cleanup(self):
-        def foo():
+        async def foo():
             try:
                 raise ValueError
             finally:
-                yield 0.1
+                await xiio.Timeout(0.1)
 
         with self.assertRaises(ValueError):
             with self.assert_duration(0.1):
