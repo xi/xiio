@@ -28,6 +28,69 @@ class XiioTestCase(unittest.TestCase):
             self.assertAlmostEqual(actual, expected, places=places)
 
 
+class TestConditionCombine(XiioTestCase):
+    def test_time(self):
+        result = xiio.Condition.combine([
+            xiio.Condition(),
+            xiio.Condition(time=1),
+            xiio.Condition(time=3),
+            xiio.Condition(time=-2),
+        ])
+        self.assertEqual(result.time, -2)
+
+    def test_futures(self):
+        f1 = xiio.Future()
+        f2 = xiio.Future()
+        _f3 = xiio.Future()
+
+        result = xiio.Condition.combine([
+            xiio.Condition(),
+            xiio.Condition(futures={f1}),
+            xiio.Condition(futures={f1, f2}),
+        ])
+
+        self.assertEqual(result.futures, {f1, f2})
+
+    def test_files(self):
+        result = xiio.Condition.combine([
+            xiio.Condition(),
+            xiio.Condition(files={1: xiio.READ, 2: xiio.READ}),
+            xiio.Condition(files={1: xiio.WRITE}),
+        ])
+
+        self.assertEqual(result.files, {
+            1: xiio.READ|xiio.WRITE,
+            2: xiio.READ,
+        })
+
+
+class TestConditionFulfilled(XiioTestCase):
+    def test_files(self):
+        condition = xiio.Condition(files={1: xiio.READ})
+        self.assertTrue(condition.fulfilled({1: xiio.READ, 2: xiio.READ}))
+
+    def test_files_wrong_mode(self):
+        condition = xiio.Condition(files={1: xiio.READ})
+        self.assertFalse(condition.fulfilled({1: xiio.WRITE, 2: xiio.READ}))
+
+    def test_future_not_done(self):
+        future = xiio.Future()
+        condition = xiio.Condition(futures={future})
+        self.assertFalse(condition.fulfilled({}))
+
+    def test_future_result(self):
+        future = xiio.Future()
+        future.set_result(1)
+        condition = xiio.Condition(futures={future})
+        self.assertTrue(condition.fulfilled({}))
+
+    def test_future_exception(self):
+        future = xiio.Future()
+        future.set_exception(ValueError)
+        condition = xiio.Condition(futures={future})
+        self.assertTrue(condition.fulfilled({}))
+
+
 class TestFuture(XiioTestCase):
     async def test_set_result(self):
         future = xiio.Future()
