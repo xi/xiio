@@ -20,7 +20,7 @@ class XiioTestCase(unittest.TestCase):
 class TestRun(XiioTestCase):
     def test_sleep(self):
         async def foo():
-            await xiio.Timeout(0.1)
+            await xiio.sleep(0.1)
             return 'Hello World'
 
         with self.assert_duration(0.1):
@@ -32,11 +32,11 @@ class TestRun(XiioTestCase):
 
         async def foo():
             try:
-                await xiio.Timeout(0.1)
+                await xiio.sleep(0.1)
             finally:
                 stack.append(1)
 
-        with mock.patch('time.sleep', side_effect=KeyboardInterrupt):
+        with mock.patch('xiio.Condition.select', side_effect=KeyboardInterrupt):
             with self.assertRaises(KeyboardInterrupt):
                 xiio.run(foo())
         self.assertEqual(stack, [1])
@@ -46,7 +46,7 @@ class TestRun(XiioTestCase):
             try:
                 raise ValueError
             finally:
-                await xiio.Timeout(0.1)
+                await xiio.sleep(0.1)
 
         with self.assertRaises(ValueError):
             with self.assert_duration(0.1):
