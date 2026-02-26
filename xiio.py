@@ -7,8 +7,9 @@ from selectors import EVENT_WRITE as WRITE
 
 
 class Condition:
-    def __init__(self, *, files={}, time=math.inf):
+    def __init__(self, *, files={}, futures=set(), time=math.inf):
         self.files = files or {}
+        self.futures = futures or set()
         self.time = time
 
     def __await__(self):
@@ -16,6 +17,8 @@ class Condition:
 
     def select(self):
         timeout = self.time - time.monotonic()
+        if any(future.done for future in self.futures):
+            timeout = 0
         with selectors.DefaultSelector() as sel:
             for fileno, events in self.files.items():
                 sel.register(fileno, events)
@@ -42,6 +45,28 @@ async def writeall(file, data):
     while data:
         size = await write(file, data)
         data = data[size:]
+
+
+class Future:
+    def __init__(self):
+        self.result = None
+        self.exc = None
+        self.done = False
+
+    def set_result(self, value):
+        self.result = value
+        self.done = True
+
+    def set_exception(self, exc):
+        self.exc = exc
+        self.done = True
+
+    def __await__(self):
+        yield Condition(futures={self})
+        if self.exc:
+            raise self.exc
+        else:
+            return self.result
 
 
 def run(coro):
