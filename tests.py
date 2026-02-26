@@ -1,4 +1,6 @@
 import contextlib
+import functools
+import inspect
 import time
 import unittest
 from unittest import mock
@@ -7,6 +9,15 @@ import xiio
 
 
 class XiioTestCase(unittest.TestCase):
+    def _callTestMethod(self, method):  # noqa
+        if not inspect.iscoroutinefunction(method):
+            return super()._callTestMethod(method)
+
+        @functools.wraps(method)
+        def wrapper(*args, **kwargs):
+            xiio.run(method(*args, **kwargs))
+        return super()._callTestMethod(wrapper)
+
     @contextlib.contextmanager
     def assert_duration(self, expected, *, places=2):
         start = time.monotonic()
@@ -15,6 +26,20 @@ class XiioTestCase(unittest.TestCase):
         finally:
             actual = time.monotonic() - start
             self.assertAlmostEqual(actual, expected, places=places)
+
+
+class TestFuture(XiioTestCase):
+    async def test_set_result(self):
+        future = xiio.Future()
+        future.set_result('test')
+        result = await future
+        self.assertEqual(result, 'test')
+
+    async def test_set_exception(self):
+        future = xiio.Future()
+        future.set_exception(TypeError)
+        with self.assertRaises(TypeError):
+            await future
 
 
 class TestRun(XiioTestCase):
