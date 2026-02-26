@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "xiio"
+version = "0a1"
+description = "really simple async runtime"
+readme = "README.md"
+license = "MIT"
+authors = [
+    {name = "Tobias Bengfort", email = "tobias.bengfort@posteo.de"}
+]
+
+[project.urls]
+Homepage = "https://github.com/xi/xiio"
+
+[tool.setuptools]
+py-modules = ["xiio"]
+
+[tool.coverage.run]
+branch = true
+include = ["xiio.py"]
