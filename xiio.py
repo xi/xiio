@@ -1,27 +1,59 @@
+import math
+import os
+import selectors
 import time
+from selectors import EVENT_READ as READ
+from selectors import EVENT_WRITE as WRITE
 
 
-class Timeout:
-    def __init__(self, seconds):
-        self.seconds = seconds
+class Condition:
+    def __init__(self, *, files={}, time=math.inf):
+        self.files = files or {}
+        self.time = time
 
     def __await__(self):
         yield self
 
-    def wait(self):
-        time.sleep(self.seconds)
+    def select(self):
+        timeout = self.time - time.monotonic()
+        with selectors.DefaultSelector() as sel:
+            for fileno, events in self.files.items():
+                sel.register(fileno, events)
+            sel.select(None if timeout == math.inf else timeout)
+
+
+async def sleep(seconds):
+    await Condition(time=time.monotonic() + seconds)
+
+
+async def read(file, size):
+    fileno = file if isinstance(file, int) else file.fileno()
+    await Condition(files={fileno: READ})
+    return os.read(fileno, size)
+
+
+async def write(file, data):
+    fileno = file if isinstance(file, int) else file.fileno()
+    await Condition(files={fileno: WRITE})
+    return os.write(fileno, data)
+
+
+async def writeall(file, data):
+    while data:
+        size = await write(file, data)
+        data = data[size:]
 
 
 def run(coro):
     gen = coro.__await__()
     try:
-        timeout = next(gen)
+        condition = next(gen)
         while True:
             try:
-                timeout.wait()
+                condition.select()
             except BaseException as e:
-                timeout = gen.throw(e)
+                condition = gen.throw(e)
             else:
-                timeout = next(gen)
+                condition = next(gen)
     except StopIteration as e:
         return e.value
