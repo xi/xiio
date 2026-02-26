@@ -1,6 +1,7 @@
 import contextlib
 import functools
 import inspect
+import os
 import time
 import unittest
 from unittest import mock
@@ -237,3 +238,19 @@ class TestRun(XiioTestCase):
         with self.assertRaises(ValueError):
             with self.assert_duration(0.1):
                 xiio.run(foo())
+
+    def test_pipe(self):
+        async def foo():
+            r, w = os.pipe()
+            try:
+                return await xiio.gather([
+                    xiio.read(r, 32),
+                    xiio.write(w, b'Hello World'),
+                ])
+            finally:
+                os.close(w)
+                os.close(r)
+
+        with self.assert_duration(0):
+            result = xiio.run(foo())
+        self.assertEqual(result, [b'Hello World', 11])
