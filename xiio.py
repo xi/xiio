@@ -130,35 +130,51 @@ class Task(typing.Generic[T]):
         self._condition = None
 
 
-async def gather(coros: list[Coro[T]]) -> list[T]:
-    tasks = [Task(coro.__await__()) for coro in coros]
-    remaining = tasks[:]
-    exc = None
+class TaskGroup(typing.Generic[T]):
+    def __init__(self) -> None:
+        self.tasks: list[Task[T]] = []
+        self.exc: BaseException | None = None
 
-    while remaining:
-        try:
-            state = await Condition.combine(
-                [task.condition for task in remaining]
-            )
-        except BaseException as e:
-            state = e
+    def add_task(self, coro: Coro[T]) -> Task[T]:
+        task = Task(coro.__await__())
+        self.tasks.append(task)
+        return task
 
-        for task in remaining[:]:
+    def cancel(self, exc: BaseException) -> None:
+        if not self.exc:
+            self.exc = exc
+            for task in self.tasks:
+                task.cancel()
+
+    def __await__(self) -> Gen[None]:
+        while self.tasks:
             try:
-                task.resume(state)
-            except StopIteration as e:
-                remaining.remove(task)
-                task.result = e.value
+                state = yield Condition.combine(
+                    [task.condition for task in self.tasks]
+                )
             except BaseException as e:
-                remaining.remove(task)
-                if not exc:
-                    exc = e
-                    for task in remaining:
-                        task.cancel()
+                state = e
 
-    if exc:
-        raise exc
+            for task in self.tasks[:]:
+                try:
+                    task.resume(state)
+                except StopIteration as e:
+                    self.tasks.remove(task)
+                    task.result = e.value
+                except CancelledError:
+                    self.tasks.remove(task)
+                except BaseException as e:
+                    self.tasks.remove(task)
+                    self.cancel(e)
 
+        if self.exc:
+            raise self.exc
+
+
+async def gather(coros: list[Coro[T]]) -> list[T]:
+    tg = TaskGroup()
+    tasks = [tg.add_task(coro) for coro in coros]
+    await tg
     return [typing.cast(T, task.result) for task in tasks]
 
 
