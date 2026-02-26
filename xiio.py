@@ -10,8 +10,8 @@ from selectors import EVENT_WRITE as WRITE
 
 T = typing.TypeVar('T')
 Files = dict[int, int]
-Gen = Generator['Condition', None, T]
-Coro = Coroutine['Condition', None, T]
+Gen = Generator['Condition', Files, T]
+Coro = Coroutine['Condition', Files, T]
 
 
 class Condition:
@@ -26,17 +26,39 @@ class Condition:
         self.futures = futures or set()
         self.time = time
 
-    def __await__(self) -> Gen[None]:
-        yield self
+    def __await__(self) -> Gen[Files]:
+        return (yield self)
 
-    def select(self) -> None:
+    @classmethod
+    def combine(cls, conditions: list['Condition']) -> 'Condition':
+        result = cls()
+        for condition in conditions:
+            for fileno, events in condition.files.items():
+                result.files.setdefault(fileno, 0)
+                result.files[fileno] |= events
+            result.futures |= condition.futures
+            result.time = min(result.time, condition.time)
+        return result
+
+    def fulfilled(self, files: Files) -> bool:
+        return (
+            self.time <= time.monotonic()
+            or any(future.done for future in self.futures)
+            or any(
+                files.get(fileno, 0) & events == events
+                for fileno, events in self.files.items()
+            )
+        )
+
+    def select(self) -> Files:
         sel = selectors.DefaultSelector()
         for fileno, events in self.files.items():
             sel.register(fileno, events)
         timeout = self.time - time.monotonic()
         if any(future.done for future in self.futures):
             timeout = 0
-        sel.select(None if timeout == math.inf else timeout)
+        selected = sel.select(None if timeout == math.inf else timeout)
+        return {key.fd: events for key, events in selected}
 
 
 async def sleep(seconds: float) -> None:
@@ -83,10 +105,10 @@ def run(coro: Coro[T]) -> T:
         condition = next(gen)
         while True:
             try:
-                condition.select()
+                files = condition.select()
             except BaseException as e:
                 condition = gen.throw(e)
             else:
-                condition = next(gen)
+                condition = gen.send(files)
     except StopIteration as e:
         return typing.cast(T, e.value)
