@@ -65,6 +65,16 @@ class Condition:
         return {key.fd: events for key, events in selected}
 
 
+class ThrowCondition(Condition):
+    def __init__(self, exc: BaseException) -> None:
+        super().__init__()
+        self.exc = exc
+
+
+class GetTaskCondition(Condition):
+    pass
+
+
 async def sleep(seconds: float) -> None:
     await Condition(time=time.monotonic() + seconds)
 
@@ -125,6 +135,13 @@ class Task(typing.Generic[T]):
         elif self.condition.fulfilled(state):
             self._condition = self.gen.send(state)
 
+        if isinstance(self._condition, ThrowCondition):
+            exc = self._condition.exc
+            self._condition = None
+            raise exc
+        elif isinstance(self._condition, GetTaskCondition):
+            self._condition = self.gen.send(typing.cast(Files, self))
+
     def cancel(self) -> None:
         self._cancel_soon = True
         self._condition = None
@@ -167,14 +184,33 @@ class TaskGroup(typing.Generic[T]):
                     self.tasks.remove(task)
                     self.cancel(e)
 
+    async def __aenter__(self) -> 'TaskGroup[T]':
+        parent_task = typing.cast(Task[T], await GetTaskCondition())
+        gen = parent_task.gen
+
+        async def wrapper():
+            await sleep(0)
+            await self
+            parent_task.gen = gen
+            parent_task._condition = None
+            await sleep(0)
+
+        self.tasks.append(Task(gen))
+        parent_task.gen = wrapper().__await__()
+        next(parent_task.gen)
+        await sleep(0)
+
+        return self
+
+    async def __aexit__(self, exc_type, exc: BaseException | None, traceback) -> None:
+        await ThrowCondition(exc or StopIteration())
         if self.exc:
             raise self.exc
 
 
 async def gather(coros: list[Coro[T]]) -> list[T]:
-    tg = TaskGroup()
-    tasks = [tg.add_task(coro) for coro in coros]
-    await tg
+    async with TaskGroup() as tg:
+        tasks = [tg.add_task(coro) for coro in coros]
     return [typing.cast(T, task.result) for task in tasks]
 
 
