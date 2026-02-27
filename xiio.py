@@ -1,8 +1,10 @@
+import contextlib
 import math
 import os
 import selectors
 import time
 import typing
+from collections.abc import AsyncGenerator
 from collections.abc import Coroutine
 from collections.abc import Generator
 from selectors import EVENT_READ as READ
@@ -220,6 +222,27 @@ async def gather(coros: list[Coro[T]]) -> list[T]:
     async with TaskGroup() as tg:
         tasks = [tg.add_task(coro) for coro in coros]
     return [typing.cast(T, task.result) for task in tasks]
+
+
+@contextlib.asynccontextmanager
+async def timeout(
+    seconds: float | None, *, throw: bool = True
+) -> AsyncGenerator[None, None]:
+    if seconds is None:
+        yield
+    else:
+        async def _timeout() -> typing.NoReturn:
+            await sleep(seconds)
+            raise TimeoutError
+
+        try:
+            async with TaskGroup() as tg:
+                task = tg.add_task(_timeout())
+                yield
+                task.cancel()
+        except TimeoutError:
+            if throw:
+                raise
 
 
 def run(coro: Coro[T]) -> T:

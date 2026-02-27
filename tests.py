@@ -241,6 +241,34 @@ class TestGather(XiioTestCase):
         self.assertEqual(stack, [1])
 
 
+class TestTimeout(XiioTestCase):
+    def test_timeout_finish(self):
+        async def foo():
+            async with xiio.timeout(1):
+                await xiio.sleep(0.2)
+                return 1
+
+        with self.assert_duration(0.2):
+            result = xiio.run(foo())
+        self.assertEqual(result, 1)
+
+    async def test_timeout_throw(self):
+        with self.assertRaises(TimeoutError):
+            with self.assert_duration(0.1):
+                async with xiio.timeout(0.1):
+                    await xiio.sleep(0.3)
+
+    async def test_timeout_no_throw(self):
+        with self.assert_duration(0.1):
+            async with xiio.timeout(0.1, throw=False):
+                await xiio.sleep(0.3)
+
+    async def test_timeout_none(self):
+        with self.assert_duration(0.1):
+            async with xiio.timeout(None):
+                await xiio.sleep(0.1)
+
+
 class TestRun(XiioTestCase):
     def test_sleep(self):
         async def foo():
