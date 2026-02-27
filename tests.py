@@ -131,39 +131,36 @@ class TestTaskGroup(XiioTestCase):
             await xiio.sleep(seconds)
             future.set_result(None)
 
-        async def foo(tg):
-            future = xiio.Future()
-            tg.add_task(set_result_later(0.1, future))
-            await future
-
-        tg = xiio.TaskGroup()
-        tg.add_task(foo(tg))
         with self.assert_duration(0.1):
-            await tg
+            async with xiio.TaskGroup() as tg:
+                future = xiio.Future()
+                tg.add_task(set_result_later(0.1, future))
+                await future
 
-    async def test_starts_tasks_on_await(self):
+    async def test_exception_in_inner_block(self):
+        with self.assert_duration(0):
+            with self.assertRaises(ValueError):
+                async with xiio.TaskGroup() as tg:
+                    tg.add_task(xiio.sleep(0.3))
+                    raise ValueError
+
+    async def test_starts_tasks_on_next_pause(self):
         stack = []
 
         async def foo(tg):
             stack.append(1)
 
-        tg = xiio.TaskGroup()
-        tg.add_task(foo(tg))
-        await xiio.sleep(0.1)
-        self.assertEqual(stack, [])
-        await tg
-        self.assertEqual(stack, [1])
+        async with xiio.TaskGroup() as tg:
+            tg.add_task(foo(tg))
+            await xiio.sleep(0.1)
+            self.assertEqual(stack, [1])
 
     async def test_removes_finished_tasks(self):
-        async def foo(tg):
+        async with xiio.TaskGroup() as tg:
             task = tg.add_task(xiio.sleep(0.1))
             self.assertIn(task, tg.tasks)
             await xiio.sleep(0.2)
             self.assertNotIn(task, tg.tasks)
-
-        tg = xiio.TaskGroup()
-        tg.add_task(foo(tg))
-        await tg
 
 
 class TestGather(XiioTestCase):
