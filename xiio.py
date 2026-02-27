@@ -1,3 +1,4 @@
+import contextlib
 import math
 import os
 import selectors
@@ -212,6 +213,18 @@ async def gather(coros: list[Coro[T]]) -> list[T]:
     async with TaskGroup() as tg:
         tasks = [tg.add_task(coro) for coro in coros]
     return [typing.cast(T, task.result) for task in tasks]
+
+
+@contextlib.asynccontextmanager
+async def timeout(seconds: float):
+    async def _timeout() -> typing.NoReturn:
+        await sleep(seconds)
+        raise TimeoutError
+
+    async with TaskGroup() as tg:
+        task = tg.add_task(_timeout())
+        yield
+        task.cancel()
 
 
 def run(coro: Coro[T]) -> T:

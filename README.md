@@ -19,13 +19,14 @@ async def greet(name):
 
 
 async def main():
-    name1 = (await xiio.read(sys.stdin, 32)).decode()
-    name2 = (await xiio.read(sys.stdin, 32)).decode()
+    async with xiio.timeout(10):
+        name1 = (await xiio.read(sys.stdin, 32)).decode()
+        name2 = (await xiio.read(sys.stdin, 32)).decode()
 
-    await xiio.gather([
-        greet(name1),
-        greet(name2),
-    ])
+        await xiio.gather([
+            greet(name1),
+            greet(name2),
+        ])
 
 
 xiio.run(main())
