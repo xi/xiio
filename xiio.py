@@ -56,14 +56,14 @@ class Condition:
         )
 
     def select(self) -> Files:
-        sel = selectors.DefaultSelector()
-        for fileno, events in self.files.items():
-            sel.register(fileno, events)
         timeout = self.time - time.monotonic()
         if any(future.done for future in self.futures):
             timeout = 0
-        selected = sel.select(None if timeout == math.inf else timeout)
-        return {key.fd: events for key, events in selected}
+        with selectors.DefaultSelector() as sel:
+            for fileno, events in self.files.items():
+                sel.register(fileno, events)
+            selected = sel.select(None if timeout == math.inf else timeout)
+            return {key.fd: events for key, events in selected}
 
 
 class ThrowCondition(Condition):
