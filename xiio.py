@@ -2,6 +2,7 @@ import contextlib
 import math
 import os
 import selectors
+import subprocess
 import time
 import typing
 from collections.abc import Coroutine
@@ -90,6 +91,40 @@ async def write(file, data: bytes) -> int:
     fileno = file if isinstance(file, int) else file.fileno()
     await Condition(files={fileno: WRITE})
     return os.write(fileno, data)
+
+
+async def wait_for_process(proc):
+    pidfd = os.pidfd_open(proc.pid)
+    if proc.poll() is None:
+        await Condition(files={pidfd: READ})
+
+
+def kill_process(proc, timeout=1):
+    proc.terminate()
+    try:
+        proc.wait(timeout)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+
+
+async def run_process(cmd, *, capture_output=False, check=False, **kwargs):
+    if capture_output:
+        kwargs['stdout'] = subprocess.PIPE
+        kwargs['stderr'] = subprocess.PIPE
+
+    with subprocess.Popen(cmd, **kwargs) as proc:
+        try:
+            await wait_for_process(proc)
+            retcode = typing.cast(int, proc.poll())
+            stdout, stderr = proc.communicate()
+        except:
+            kill_process(proc)
+            raise
+
+    result = subprocess.CompletedProcess(cmd, retcode, stdout, stderr)
+    if check:
+        result.check_returncode()
+    return result
 
 
 class Future(typing.Generic[T]):
