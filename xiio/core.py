@@ -33,6 +33,15 @@ class Condition:
     def __await__(self) -> Gen[Files]:
         return (yield self)
 
+    @property
+    def timeout(self) -> float | None:
+        if any(future.done for future in self.futures):
+            return 0
+        elif self.time == math.inf:
+            return None
+        else:
+            return self.time - time.monotonic()
+
     @classmethod
     def combine(cls, conditions: list['Condition']) -> 'Condition':
         result = cls()
@@ -55,13 +64,10 @@ class Condition:
         )
 
     def select(self) -> Files:
-        timeout = self.time - time.monotonic()
-        if any(future.done for future in self.futures):
-            timeout = 0
         with selectors.DefaultSelector() as sel:
             for fileno, events in self.files.items():
                 sel.register(fileno, events)
-            selected = sel.select(None if timeout == math.inf else timeout)
+            selected = sel.select(self.timeout)
             return {key.fd: events for key, events in selected}
 
 
