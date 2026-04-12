@@ -9,3 +9,4 @@ from .multiplex import TaskGroup  # noqa
 from .multiplex import gather  # noqa
 from .multiplex import timeout  # noqa
 from .subprocess import run_process  # noqa
+from .signals import subscribe_signals  # noqa
