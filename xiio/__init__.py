@@ -8,3 +8,4 @@ from .core import CancelledError  # noqa
 from .multiplex import TaskGroup  # noqa
 from .multiplex import gather  # noqa
 from .multiplex import timeout  # noqa
+from .subprocess import run_process  # noqa
