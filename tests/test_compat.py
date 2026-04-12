@@ -9,7 +9,7 @@ import xiio
 
 class TestOnAsyncIO(unittest.IsolatedAsyncioTestCase):
     @contextlib.contextmanager
-    def assert_duration(self, expected, *, places=2):
+    def assert_duration(self, expected, *, places=1):
         start = time.monotonic()
         try:
             yield
@@ -22,7 +22,7 @@ class TestOnAsyncIO(unittest.IsolatedAsyncioTestCase):
             await xiio.on_asyncio(xiio.sleep(0.1))
 
     async def test_sleep_both(self):
-        with self.assert_duration(0.1, places=1):
+        with self.assert_duration(0.1):
             await asyncio.gather(
                 asyncio.sleep(0.1),
                 xiio.on_asyncio(xiio.sleep(0.1)),

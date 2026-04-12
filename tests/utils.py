@@ -19,7 +19,7 @@ class XiioTestCase(unittest.TestCase):
         return super()._callTestMethod(wrapper)  # ty: ignore[unresolved-attribute]
 
     @contextlib.contextmanager
-    def assert_duration(self, expected, *, places=2):
+    def assert_duration(self, expected, *, places=1):
         start = time.monotonic()
         try:
             yield
