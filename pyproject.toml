@@ -15,9 +15,6 @@ authors = [
 [project.urls]
 Homepage = "https://github.com/xi/xiio"
 
-[tool.setuptools]
-py-modules = ["xiio"]
-
 [tool.coverage.run]
 branch = true
-include = ["xiio.py"]
+include = ["xiio/**"]
