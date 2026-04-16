@@ -7,7 +7,7 @@ from .core import CancelledError
 from .core import Condition
 from .core import Coro
 from .core import Gen
-from .core import GetTaskCondition
+from .core import SwitchGenCondition
 from .core import Task
 from .core import ThrowCondition
 from .core import sleep
@@ -53,20 +53,15 @@ class TaskGroup(typing.Generic[T]):
                     self.cancel(e)
 
     async def __aenter__(self) -> 'TaskGroup[T]':
-        parent_task = typing.cast(Task[T], await GetTaskCondition())
-        gen = parent_task.gen
-
         async def wrapper():
-            await Condition(time=-math.inf)
             await self
-            parent_task.gen = gen
-            parent_task._condition = None
+            await SwitchGenCondition(parent_gen)
             await Condition(time=-math.inf)
 
-        self.tasks.append(Task(gen))
-        parent_task.gen = typing.cast(typing.Any, wrapper().__await__())
-        next(parent_task.gen)
-        await Condition(time=-math.inf)
+        wrapper_gen = typing.cast(Gen, wrapper().__await__())
+        parent_gen = typing.cast(Gen, await SwitchGenCondition(wrapper_gen))
+        self.tasks.append(Task(parent_gen))
+        await next(wrapper_gen)
 
         return self
 

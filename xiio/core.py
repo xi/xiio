@@ -77,9 +77,10 @@ class ThrowCondition(Condition):
         self.exc = exc
 
 
-class GetTaskCondition(Condition):
-    def __init__(self):
-        super().__init__(time=-math.inf)
+class SwitchGenCondition(Condition):
+    def __init__(self, gen: Gen):
+        super().__init__()
+        self.gen = gen
 
 
 async def sleep(seconds: float) -> None:
@@ -148,8 +149,10 @@ class Task(typing.Generic[T]):
         elif self.condition.fulfilled(state):
             self._condition = self.gen.send(state)
 
-        while isinstance(self._condition, GetTaskCondition):
-            self._condition = self.gen.send(typing.cast(Files, self))
+        while isinstance(self._condition, SwitchGenCondition):
+            gen = self.gen
+            self.gen = self._condition.gen
+            self._condition = gen.send(typing.cast(Files, gen))
 
         if isinstance(self._condition, ThrowCondition):
             exc = self._condition.exc
