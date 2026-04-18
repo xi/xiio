@@ -16,6 +16,9 @@ requires-python = ">= 3.11"
 [project.urls]
 Homepage = "https://github.com/xi/xiio"
 
+[project.optional-dependencies]
+http = ["h11"]
+
 [tool.coverage.run]
 branch = true
 include = ["xiio/**"]
