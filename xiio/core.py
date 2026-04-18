@@ -119,12 +119,15 @@ class Future(typing.Generic[T]):
         self.exc = exc
         self.done = True
 
-    def __await__(self) -> Gen[T]:
-        yield Condition(futures={self})
+    def unwrap(self) -> T:
         if self.exc:
             raise self.exc
         else:
             return typing.cast(T, self.result)
+
+    def __await__(self) -> Gen[T]:
+        yield Condition(futures={self})
+        return self.unwrap()
 
 
 class Task(typing.Generic[T]):

@@ -15,7 +15,7 @@ async def future_with_fd(future: Future[T], fd: int) -> T:
     while not future.done:
         await Condition(files={fd: READ})
     os.read(fd, 1)
-    return await future
+    return future.unwrap()
 
 
 class ThreadPool:
