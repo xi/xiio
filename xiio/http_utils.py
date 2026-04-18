@@ -84,7 +84,6 @@ class Request:
     def headers(self) -> Headers:
         headers = Headers(self._headers)
         headers['Host'] = self.url.host
-        headers['Connection'] = 'close'
         if self.body:
             headers['Content-Length'] = str(len(self.body))
         return headers

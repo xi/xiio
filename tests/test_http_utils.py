@@ -78,7 +78,6 @@ class TestRequest(unittest.TestCase):
         self.assertEqual(req.headers, Headers({
             'X-Test': '123',
             'Host': 'example.com',
-            'Connection': 'close',
         }))
 
     def test_headers_with_body(self):

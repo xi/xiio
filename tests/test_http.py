@@ -66,3 +66,11 @@ class TestFollowRedirects(XiioTestCase):
             await xiio.http.request(
                 'GET', 'https://httpbin.org/redirect/3', max_redirects=2
             )
+
+    async def test_cross_origin(self):
+        response = await xiio.http.request(
+            'GET', 'https://httpbin.org/redirect-to', params={'url': 'https://example.com'}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(str(response.request.url), 'https://example.com')
+        self.assertEqual(len(response.history), 1)
