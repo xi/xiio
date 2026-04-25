@@ -10,6 +10,10 @@ from .multiplex import gather  # noqa
 from .multiplex import timeout  # noqa
 from .threads import ThreadPool  # noqa
 from .threads import in_thread  # noqa
+from .socket import create_connection  # noqa
+from .socket import recv  # noqa
+from .socket import send  # noqa
+from .socket import sendall  # noqa
 from .subprocess import run_process  # noqa
 from .signals import subscribe_signals  # noqa
 from .compat import on_asyncio  # noqa
