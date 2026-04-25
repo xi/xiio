@@ -11,6 +11,7 @@ license = "MIT"
 authors = [
     {name = "Tobias Bengfort", email = "tobias.bengfort@posteo.de"}
 ]
+requires-python = ">= 3.11"
 
 [project.urls]
 Homepage = "https://github.com/xi/xiio"
